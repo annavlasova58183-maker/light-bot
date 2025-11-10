@@ -1,5 +1,6 @@
 import telebot
 from telebot import types
+from flask import Flask, request
 import os
 import time
 
@@ -13,10 +14,11 @@ if not BOT_TOKEN:
     exit(1)
 
 bot = telebot.TeleBot(BOT_TOKEN)
+app = Flask(__name__)
 
-# Сховище тимчасових даних операторів
+# === Сховище тимчасових даних ===
 user_reports = {}
-user_last_report_msg = {}  # зберігає ID повідомлення звіту в групі керівників
+user_last_report_msg = {}
 
 # === Кнопки меню ===
 def main_menu():
@@ -71,9 +73,8 @@ def get_proof(message):
         f"💡 Світло обіцяють дати: {user_data.get('light_return')}"
     )
 
-    # Відправляємо керівникам
     sent_msg = bot.send_message(MANAGER_GROUP_ID, text, parse_mode="HTML")
-    user_last_report_msg[message.chat.id] = sent_msg.message_id  # зберігаємо ID цього повідомлення
+    user_last_report_msg[message.chat.id] = sent_msg.message_id
 
     if proof and isinstance(proof, str) and not proof.startswith("AgAC"):
         bot.send_message(MANAGER_GROUP_ID, f"📎 Доказ: {proof}")
@@ -105,12 +106,27 @@ def ignore_manager_group(message):
     else:
         bot.send_message(message.chat.id, "Оберіть дію з меню 👇", reply_markup=main_menu())
 
-# === Безпечний запуск для Render ===
-print("✅ Бот запущено. Очікуємо повідомлення...")
+# === Flask webhook ===
+@app.route(f'/{BOT_TOKEN}', methods=['POST'])
+def webhook():
+    json_str = request.get_data().decode('UTF-8')
+    update = telebot.types.Update.de_json(json_str)
+    bot.process_new_updates([update])
+    return "!", 200
 
-while True:
-    try:
-        bot.polling(none_stop=True, timeout=90)
-    except Exception as e:
-        print(f"⚠️ Помилка в polling: {e}")
-        time.sleep(5)
+@app.route('/')
+def index():
+    return "Bot is running!", 200
+
+if __name__ == '__main__':
+    import logging
+    logging.basicConfig(level=logging.INFO)
+    bot.remove_webhook()
+    render_host = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
+    if render_host:
+        webhook_url = f"https://{render_host}/{BOT_TOKEN}"
+        bot.set_webhook(url=webhook_url)
+        print(f"✅ Webhook встановлено: {webhook_url}")
+    else:
+        print("⚠️ RENDER_EXTERNAL_HOSTNAME не знайдено!")
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
