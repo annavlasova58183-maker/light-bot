@@ -1,15 +1,16 @@
 import telebot
 from telebot import types
 import os
+import time
 
 # === Дані бота ===
 BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
+MANAGER_GROUP_ID = -1003164165301
 
 if not BOT_TOKEN:
     print("❌ Помилка: TELEGRAM_BOT_TOKEN не встановлений!")
+    time.sleep(10)
     exit(1)
-
-MANAGER_GROUP_ID = -1003164165301
 
 bot = telebot.TeleBot(BOT_TOKEN)
 
@@ -104,5 +105,12 @@ def ignore_manager_group(message):
     else:
         bot.send_message(message.chat.id, "Оберіть дію з меню 👇", reply_markup=main_menu())
 
-# === Запуск ===
-bot.polling(none_stop=True)
+# === Безпечний запуск для Render ===
+print("✅ Бот запущено. Очікуємо повідомлення...")
+
+while True:
+    try:
+        bot.polling(none_stop=True, timeout=90)
+    except Exception as e:
+        print(f"⚠️ Помилка в polling: {e}")
+        time.sleep(5)
